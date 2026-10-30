@@ -1,5 +1,4 @@
-from src.mini16.cpu import CPU
-from src.mini16.memory import Memory
+from src.mini16 import CPU, Assembler, Memory
 
 
 def print_cpu_state(step_num: int, cpu: CPU) -> None:
@@ -11,37 +10,51 @@ def print_cpu_state(step_num: int, cpu: CPU) -> None:
 
 
 def main() -> None:
+    # Исходный текст программы на ассемблере 
+    source_code = """
+        # Инициализация
+        MOVI R0, 0       # R0 = Аккумулятор суммы
+        MOVI R1, 5       # R1 = Счетчик (будем уменьшать от 5 до 0)
+        MOVI R2, 1       # R2 = Шаг декремента (1)
+
+    loop:
+        ADD  R0, R1      # R0 = R0 + R1 (прибавляем текущий счетчик)
+        SUB  R1, R2      # R1 = R1 - 1  (уменьшаем счетчик, выставляет флаг Z при 0)
+        JZ   exit        # Если R1 == 0 (Z=1), выходим из цикла
+        JMP  loop        # Иначе прыгаем обратно на метку loop
+
+    exit:
+        HALT             # Остановка 
+    """
+
+    # 1. Ассемблирование текста в машинный код
+    asm = Assembler()
+    machine_code = asm.assemble(source_code)
+
+    print("Сгенерированный машинный код (hex):")
+    print([f"0x{word:04X}" for word in machine_code])
+    print("-" * 50)
+
+    # 2. Инициализация аппаратуры
     ram = Memory()
     cpu = CPU(memory=ram)
 
-    # R0 = 10; R1 = 25; R0 = R0 + R1; HALT
-    program = [
-        0x100A,  # MOVI R0, 10
-        0x1219,  # MOVI R1, 25
-        0x3040,  # ADD  R0, R1
-        0x0000,  # HALT
-    ]
+    # 3. Загрузка собранного кода в ОЗУ
+    ram.load_program(start_address=0, code=machine_code)
 
-    # Загрузка программы в память начиная с адреса 0x0000
-    ram.load_program(start_address=0, code=program)
-
-    print("=== Начальное состояние ===")
-    print_cpu_state(0, cpu)
-    print("===========================")
-
-    # Потактовое выполнение (Fetch-Decode-Execute)
+    print("=== Старт выполнения программы ===")
     step_counter = 1
     while not cpu.halted:
         current_pc = cpu.pc
         current_word = ram.read(current_pc)
         cpu.step()
-        print(f"Выполнено слово 0x{current_word:04X} с адреса 0x{current_pc:04X}")
-        print_cpu_state(step_counter, cpu)
-        print("-" * 50)
+        print(f"Такт {step_counter:02d} | Слово 0x{current_word:04X} с адреса 0x{current_pc:04X}")
         step_counter += 1
 
-    print("\nПроцессор успешно завершил работу.")
-    print(f"Итоговый результат в R0: {cpu.registers[0]}")
+    print("=" * 50)
+    print("Выполнение завершено.")
+    print_cpu_state(step_counter, cpu)
+    print(f"\nИтоговая сумма в R0: {cpu.registers[0]} (ожидается 15)")
 
 
 if __name__ == "__main__":
